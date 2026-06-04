@@ -39,37 +39,6 @@ TRAIN_END  = pd.Timestamp("2021-12-31")
 TEST_START = pd.Timestamp("2022-01-01")
 
 # ── Predictor sets ─────────────────────────────────────────────────────────────
-#
-# ACLED baseline predictors — capturing three conceptual dimensions:
-#
-#   Short-term dynamics (individual lags):
-#     events_lag1–4: event count 1 to 4 weeks before prediction.
-#                    Individual lags capture week-specific spikes and
-#                    allow the model to weight recent weeks differently.
-#
-#   Medium-term level (moving averages):
-#     events_ma4:    4-week rolling mean — the most recent sustained level.
-#     events_ma8:    8-week rolling mean — slightly longer-term trend.
-#                    Moving averages smooth noise and capture the conflict
-#                    regime a country is currently in.
-#
-#   Volatility:
-#     events_std4:   4-week rolling standard deviation.
-#                    Erratic conflict patterns signal active dynamics.
-#
-#   Persistence:
-#     conflict_weeks_last8: count of weeks with any conflict in past 8 weeks.
-#                           Captures sustained conflict streaks, which the
-#                           literature shows is among the strongest predictors
-#                           of continued political violence.
-#
-# Note on multicollinearity: individual lags and moving averages are all
-# derived from the same underlying event count series, so they are correlated.
-# VIF analysis confirmed high VIF for several of these predictors when included
-# simultaneously. However, the supervisor confirmed that multicollinearity is
-# acceptable when the goal is prediction rather than causal inference of
-# individual coefficients, provided the model converges and performs well on
-# held-out data. Both conditions are met here.
 
 BASELINE_PREDICTORS = [
     "events_lag1",
@@ -82,25 +51,13 @@ BASELINE_PREDICTORS = [
     "conflict_weeks_last8",
 ]
 
-# GDELT predictors — one variable per conceptual media dimension, lagged 1 week.
-# Lagging prevents reverse causality: we use last week's media coverage
-# to predict next week's conflict, not concurrent coverage.
-#
-#   tone_lag1:       average sentiment tone of news (negative = more conflictual).
-#   goldstein_lag1:  average Goldstein scale score (-10 conflict to +10 cooperation).
-#   mentions_lag1:   total media mention volume — proxy for international attention.
-#
-# VIF for these three is below 3, confirming they are not collinear with each
-# other or with the ACLED predictors.
-
 GDELT_PREDICTORS = [
     "tone_lag1",
     "goldstein_lag1",
     "mentions_lag1",
 ]
 
-# Extended = baseline + GDELT. The models are nested by construction:
-# any difference in performance is attributable only to the GDELT variables.
+# Extended = baseline + GDELT.
 EXTENDED_PREDICTORS = BASELINE_PREDICTORS + GDELT_PREDICTORS
 
 
@@ -109,7 +66,7 @@ EXTENDED_PREDICTORS = BASELINE_PREDICTORS + GDELT_PREDICTORS
 def fix_float_col(series: pd.Series) -> pd.Series:
     """
     Repair float columns where dots were used as thousand separators
-    inside the decimal expansion — an artefact of certain CSV export pipelines.
+    inside the decimal expansion: an artefact of certain CSV export pipelines.
 
     Example:  '-24.357.218.790'  →  -24.357218790
 
@@ -146,11 +103,6 @@ def fix_float_col(series: pd.Series) -> pd.Series:
 def get_split(panel, horizon, predictors):
     """
     Extract a train/test split for a given forecast horizon.
-
-    Uses a strict temporal split — train on 2015-2021, test on 2022-2023 —
-    mirroring real forecasting where the model never sees future data.
-    Random shuffling is avoided because lagged predictors would leak future
-    information across the split boundary if rows were shuffled.
 
     Parameters
     ----------
@@ -205,9 +157,7 @@ def fit_negbinom(X_train, y_train):
 
     Predictors are standardised (zero mean, unit variance) before fitting.
     This helps the optimiser converge because all predictors are on the same
-    scale — without scaling, a predictor with values in the thousands (e.g.
-    mentions_lag1) would dominate the Hessian relative to one in the range
-    0-10 (e.g. goldstein_lag1). The scaler is stored on the result object
+    scale. The scaler is stored on the result object
     so that predict_negbinom applies the same transformation to new data.
 
     Optimiser cascade: Newton-Raphson first (fastest, second-order), then
@@ -325,7 +275,7 @@ def build_coef_table(result):
     Extract a clean coefficient table from a fitted NegativeBinomialResults.
 
     The intercept (const) and dispersion parameter (alpha) are excluded
-    from the main table — alpha is reported separately as a model diagnostic.
+    from the main table; alpha is reported separately as a model diagnostic.
 
     Returns
     -------
