@@ -89,7 +89,7 @@ Each notebook:
 ## Data
 
 ### Raw Data
-Raw datasets (ACLED and GDELT) are included in raw_data/.
+Raw datasets (ACLED and GDELT) are included in `raw_data/`.
 
 ### Processed Data
 The `processed/` folder contains cleaned and preprocessed datasets that allow the modelling notebooks (04–06) to be run directly without re-running preprocessing.
